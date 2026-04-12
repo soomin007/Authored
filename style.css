@@ -1,4 +1,4 @@
-/* style.css — AUTHORED */
+/* style.css v2 — AUTHORED */
 
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -9,9 +9,9 @@
 }
 
 :root {
-  --bg: #0a0a0f;
+  --bg:   #0a0a0f;
   --text: #e8e8e8;
-  --ai: #00ffcc;
+  --ai:   #00ffcc;
   --accent: #ffcc00;
   --font: 'JetBrains Mono', 'Courier New', monospace;
 }
@@ -53,6 +53,11 @@ html, body {
   animation: streamDown linear infinite;
 }
 
+/* 4막 강화 */
+#bg-stream.act4 .stream-col {
+  opacity: 0.12;
+}
+
 @keyframes streamDown {
   0%   { transform: translateY(-100%); }
   100% { transform: translateY(200vh); }
@@ -71,16 +76,13 @@ html, body {
   transition: opacity 0.5s;
 }
 
-#scene.fade-out {
-  opacity: 0;
-}
+#scene.fade-out { opacity: 0; }
 
 #game-container {
   width: min(680px, 90vw);
   min-height: 60vh;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
   gap: 0;
 }
 
@@ -89,7 +91,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 280px;
+  min-height: 220px;
 }
 
 .dialogue-line {
@@ -99,8 +101,17 @@ html, body {
   transition: opacity 0.3s;
 }
 
-.dialogue-line.visible {
-  opacity: 1;
+.dialogue-line.visible { opacity: 1; }
+
+/* 2막 라운드 3: 텍스트 오른쪽 치우침 */
+.dialogue-line.misalign-right {
+  text-align: right;
+  padding-right: 20px;
+}
+
+/* 2막 라운드 4: 텍스트 빨간색 */
+.dialogue-line.miscolor-red {
+  color: #ff5555;
 }
 
 /* 타자기 커서 */
@@ -119,9 +130,157 @@ html, body {
   50%       { opacity: 0; }
 }
 
-/* ───── 버튼 영역 ───── */
+/* ───── 미니게임 영역 ───── */
+#mini-game-area {
+  margin-top: 20px;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+#mini-game-area.visible { opacity: 1; }
+
+/* 1막: 원형 버튼 */
+.circle-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 130px;
+}
+
+.circle-btn {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid var(--ai);
+  color: var(--ai);
+  font-family: var(--font);
+  font-size: 26px;
+  cursor: pointer;
+  transition: transform 0.35s ease, background 0.2s;
+  transform-origin: center;
+}
+
+.circle-btn:hover:not(:disabled) {
+  background: rgba(0, 255, 204, 0.08);
+}
+
+.circle-btn:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+/* 2막: LEFT / RIGHT 버튼 영역 */
+.lr-area {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.lr-btn {
+  min-width: 110px;
+  background: transparent;
+  border: 1px solid rgba(232, 232, 232, 0.45);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  padding: 10px 20px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-align: center;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.lr-btn:hover:not(:disabled) {
+  border-color: var(--ai);
+  color: var(--ai);
+  background: rgba(0, 255, 204, 0.05);
+}
+
+.lr-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* 2막 라운드 4: 색상 버튼 */
+.btn-blue {
+  border-color: #4488ff;
+  color: #4488ff;
+}
+.btn-blue:hover:not(:disabled) {
+  border-color: #66aaff;
+  color: #66aaff;
+  background: rgba(68, 136, 255, 0.07);
+}
+
+.btn-red {
+  border-color: #ff5555;
+  color: #ff5555;
+}
+.btn-red:hover:not(:disabled) {
+  border-color: #ff7777;
+  color: #ff7777;
+  background: rgba(255, 85, 85, 0.07);
+}
+
+/* 3막: 침묵 커서 */
+.silence-area {
+  display: flex;
+  justify-content: center;
+  padding: 44px 0;
+}
+
+.silence-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 26px;
+  background: var(--ai);
+  animation: blink 0.7s step-end infinite;
+}
+
+/* 4막: 숫자 흩어진 버튼 */
+.number-game {
+  position: relative;
+  width: 340px;
+  height: 220px;
+}
+
+.num-btn {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(232, 232, 232, 0.45);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: border-color 0.2s, color 0.2s, background 0.2s, opacity 0.3s;
+}
+
+.num-btn:hover:not(:disabled):not(.clicked) {
+  border-color: var(--ai);
+  color: var(--ai);
+  background: rgba(0, 255, 204, 0.05);
+}
+
+.num-btn.clicked {
+  border-color: rgba(0, 255, 204, 0.4);
+  color: rgba(0, 255, 204, 0.4);
+  cursor: default;
+}
+
+.num-btn:disabled:not(.clicked) {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* ───── 버튼 영역 (CONTINUE / 선택지) ───── */
 #button-area {
-  margin-top: 32px;
+  margin-top: 28px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -129,9 +288,7 @@ html, body {
   transition: opacity 0.4s;
 }
 
-#button-area.visible {
-  opacity: 1;
-}
+#button-area.visible { opacity: 1; }
 
 button {
   background: transparent;
@@ -144,7 +301,7 @@ button {
   letter-spacing: 0.05em;
   transition: border-color 0.2s, color 0.2s, background 0.2s;
   text-align: left;
-  max-width: 400px;
+  max-width: 420px;
 }
 
 button:hover {
@@ -175,40 +332,17 @@ button#continue-btn:hover {
   color: var(--text);
 }
 
-/* ───── 캔버스 (퍼즐) ───── */
-#puzzle-area {
-  margin-top: 24px;
-  opacity: 0;
-  transition: opacity 0.4s;
-}
-
-#puzzle-area.visible {
-  opacity: 1;
-}
-
-#puzzle-canvas {
-  display: block;
-  cursor: crosshair;
-}
-
-#puzzle-hint {
-  margin-top: 12px;
-  font-size: 13px;
-  color: var(--accent);
-  min-height: 1.5em;
-}
-
-/* ───── 흔들림 효과 (4막) ───── */
+/* ───── 글리치 효과 (4막) ───── */
 .glitch {
-  animation: glitch 0.1s steps(1) 3;
+  animation: glitch 0.12s steps(1) 3;
 }
 
 @keyframes glitch {
-  0%   { transform: translateX(0); opacity: 1; }
+  0%   { transform: translateX(0);   opacity: 1;   }
   25%  { transform: translateX(-2px); opacity: 0.8; }
-  50%  { transform: translateX(2px); opacity: 1; }
+  50%  { transform: translateX(2px);  opacity: 1;   }
   75%  { transform: translateX(-1px); opacity: 0.9; }
-  100% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(0);   opacity: 1;   }
 }
 
 /* ───── 크레딧 ───── */
@@ -232,57 +366,72 @@ button#continue-btn:hover {
 
 #credits-inner {
   text-align: center;
-  line-height: 2.2;
 }
 
 #credits-inner h1 {
-  font-size: 28px;
-  letter-spacing: 0.3em;
+  font-size: 26px;
+  letter-spacing: 0.35em;
   color: var(--text);
-  margin-bottom: 48px;
+  margin-bottom: 44px;
 }
 
-#credits-inner .credit-row {
-  font-size: 14px;
-  color: rgba(232, 232, 232, 0.7);
+.credit-rows {
   display: flex;
-  justify-content: space-between;
-  gap: 48px;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
 }
 
-#credits-inner .credit-row .label {
+.credit-row {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.credit-row .label {
   color: rgba(232, 232, 232, 0.4);
+  min-width: 120px;
+  text-align: right;
 }
 
-#credits-inner .credit-row .value {
+.credit-row .dash {
+  color: rgba(232, 232, 232, 0.2);
+  letter-spacing: -0.05em;
+}
+
+.credit-row .value {
   color: var(--text);
+  min-width: 80px;
+  text-align: left;
 }
 
-#credits-inner .credit-row .value.unknown {
+.credit-row .value.unknown {
   color: var(--accent);
 }
 
-#credits-inner .thanks {
-  margin-top: 48px;
+.credits-thanks {
+  margin-top: 44px;
   font-size: 13px;
   color: rgba(232, 232, 232, 0.4);
 }
 
-#credits-inner .signature {
-  margin-top: 8px;
-  font-size: 13px;
-  color: rgba(232, 232, 232, 0.3);
+.credits-sig {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(232, 232, 232, 0.25);
 }
 
-#credits-inner #restart-btn {
-  margin-top: 48px;
-  border-color: rgba(232, 232, 232, 0.3);
-  color: rgba(232, 232, 232, 0.5);
-  font-size: 13px;
-  letter-spacing: 0.1em;
+#restart-btn {
+  margin-top: 44px;
+  border-color: rgba(232, 232, 232, 0.3) !important;
+  color: rgba(232, 232, 232, 0.5) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.1em !important;
+  text-align: center !important;
 }
 
-#credits-inner #restart-btn:hover {
-  border-color: var(--text);
-  color: var(--text);
+#restart-btn:hover {
+  border-color: var(--text) !important;
+  color: var(--text) !important;
 }

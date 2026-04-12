@@ -1,23 +1,30 @@
-// game.js — AUTHORED 게임 로직
+// game.js v2 — AUTHORED 게임 로직
 
 const state = {
   act: 1,
   choices: [],
   endingType: null,
-  act2UnexpectedPath: false,
+  isReturning: false,
 };
 
-// ───── DOM 레퍼런스 ─────
+// ─── DOM refs ──────────────────────────────────────────────
 const dialogueArea = document.getElementById('dialogue-area');
 const buttonArea   = document.getElementById('button-area');
-const puzzleArea   = document.getElementById('puzzle-area');
-const puzzleCanvas = document.getElementById('puzzle-canvas');
-const puzzleHint   = document.getElementById('puzzle-hint');
+const miniGameArea = document.getElementById('mini-game-area');
 const bgStream     = document.getElementById('bg-stream');
 const scene        = document.getElementById('scene');
 const credits      = document.getElementById('credits');
 
-// ───── 타자기 효과 ─────
+// ─── 기본 헬퍼 ─────────────────────────────────────────────
+
+function rAF(fn) {
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
+function pause(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function typewriter(element, text, speed = 40) {
   return new Promise(resolve => {
     let i = 0;
@@ -25,13 +32,12 @@ function typewriter(element, text, speed = 40) {
     const cursor = document.createElement('span');
     cursor.className = 'cursor';
     element.appendChild(cursor);
-
-    const interval = setInterval(() => {
+    const iv = setInterval(() => {
       if (i < text.length) {
         element.insertBefore(document.createTextNode(text[i]), cursor);
         i++;
       } else {
-        clearInterval(interval);
+        clearInterval(iv);
         cursor.remove();
         resolve();
       }
@@ -39,11 +45,6 @@ function typewriter(element, text, speed = 40) {
   });
 }
 
-function pause(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ───── 씬 페이드 전환 ─────
 function fadeOut() {
   return new Promise(resolve => {
     scene.classList.add('fade-out');
@@ -58,70 +59,49 @@ function fadeIn() {
   });
 }
 
-// ───── 대화 출력 ─────
-function clearDialogue() {
+function clearScene() {
   dialogueArea.innerHTML = '';
-  buttonArea.innerHTML = '';
+  buttonArea.innerHTML   = '';
   buttonArea.classList.remove('visible');
-  puzzleArea.classList.remove('visible');
+  miniGameArea.innerHTML = '';
+  miniGameArea.classList.remove('visible');
 }
 
+// 대화 영역에 한 줄 추가 (타자기 효과)
+async function addLine(text, extraClass = '') {
+  const el = document.createElement('p');
+  el.className = 'dialogue-line' + (extraClass ? ' ' + extraClass : '');
+  dialogueArea.appendChild(el);
+  el.classList.add('visible');
+  if (state.act === 4 && Math.random() < 0.25) {
+    await pause(120);
+    el.classList.add('glitch');
+  }
+  await typewriter(el, text, 38);
+  await pause(260);
+}
+
+// ─── 대화 러너 ─────────────────────────────────────────────
+// lines 배열을 순서대로 실행. choice가 있으면 선택된 값을 반환.
 async function runDialogue(lines) {
-  return new Promise(async (outerResolve) => {
-    let i = 0;
-
-    async function next() {
-      if (i >= lines.length) {
-        outerResolve();
-        return;
-      }
-
-      const line = lines[i++];
-
-      if (line.type === 'ai') {
-        const el = document.createElement('p');
-        el.className = 'dialogue-line';
-        dialogueArea.appendChild(el);
-        el.classList.add('visible');
-
-        // 4막 글리치 효과
-        if (state.act === 4 && Math.random() < 0.3) {
-          await pause(200);
-          el.classList.add('glitch');
-        }
-
-        await typewriter(el, line.text, 38);
-        await pause(300);
-        await next();
-
-      } else if (line.type === 'pause') {
-        await pause(line.duration || 1000);
-        await next();
-
-      } else if (line.type === 'continue') {
-        showContinueButton().then(() => {
-          outerResolve();
-        });
-
-      } else if (line.type === 'choice') {
-        showChoices(line.choices).then(chosen => {
-          state.choices.push(chosen);
-          outerResolve(chosen);
-        });
-
-      } else if (line.type === 'credits') {
-        showCredits();
-
-      } else {
-        await next();
-      }
+  for (const line of lines) {
+    if (line.type === 'ai') {
+      await addLine(line.text);
+    } else if (line.type === 'pause') {
+      await pause(line.duration || 1000);
+    } else if (line.type === 'continue') {
+      await showContinueButton();
+    } else if (line.type === 'choice') {
+      return showChoices(line.choices);
+    } else if (line.type === 'credits') {
+      showCredits();
+      return;
     }
-
-    await next();
-  });
+  }
 }
 
-// ───── 버튼 ─────
+// ─── 버튼 ──────────────────────────────────────────────────
+
 function showContinueButton() {
   return new Promise(resolve => {
     buttonArea.innerHTML = '';
@@ -133,11 +113,7 @@ function showContinueButton() {
       setTimeout(resolve, 400);
     });
     buttonArea.appendChild(btn);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        buttonArea.classList.add('visible');
-      });
-    });
+    rAF(() => buttonArea.classList.add('visible'));
   });
 }
 
@@ -154,144 +130,221 @@ function showChoices(choices) {
       });
       buttonArea.appendChild(btn);
     });
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        buttonArea.classList.add('visible');
+    rAF(() => buttonArea.classList.add('visible'));
+  });
+}
+
+function hideMiniGame() {
+  miniGameArea.classList.remove('visible');
+  return pause(400);
+}
+
+// ─── 1막 미니게임: 클릭 반복 (버튼 점점 작아짐) ───────────
+
+async function runAct1MiniGame() {
+  miniGameArea.innerHTML = '';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'circle-btn-wrapper';
+  const btn = document.createElement('button');
+  btn.className = 'circle-btn';
+  btn.textContent = '●';
+  wrapper.appendChild(btn);
+  miniGameArea.appendChild(wrapper);
+  rAF(() => miniGameArea.classList.add('visible'));
+
+  return new Promise(resolve => {
+    let count = 0;
+    let busy  = false;
+
+    btn.addEventListener('click', async () => {
+      if (busy || btn.disabled) return;
+      busy = true;
+      count++;
+
+      const scale = Math.max(0.3, 1 - count * 0.07);
+      btn.style.transform = `scale(${scale})`;
+
+      const responseText = DIALOGUE.act1_click_responses[count - 1];
+      await addLine(responseText);
+
+      if (count >= 10) {
+        btn.disabled = true;
+        await hideMiniGame();
+        miniGameArea.innerHTML = '';
+        resolve();
+      } else {
+        busy = false;
+      }
+    });
+  });
+}
+
+// ─── 2막 미니게임: 모순된 지시 4라운드 ────────────────────
+
+// LEFT/RIGHT 또는 커스텀 라벨 버튼 두 개를 보여주고 선택 대기
+function showLRButtons(label1, label2, cls1 = '', cls2 = '') {
+  return new Promise(resolve => {
+    miniGameArea.innerHTML = '';
+    const area = document.createElement('div');
+    area.className = 'lr-area';
+
+    [
+      { label: label1, cls: cls1 },
+      { label: label2, cls: cls2 },
+    ].forEach(({ label, cls }) => {
+      const btn = document.createElement('button');
+      btn.className = `lr-btn ${cls}`.trim();
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        area.querySelectorAll('button').forEach(b => (b.disabled = true));
+        setTimeout(() => resolve(label), 150);
+      });
+      area.appendChild(btn);
+    });
+
+    miniGameArea.appendChild(area);
+    rAF(() => miniGameArea.classList.add('visible'));
+  });
+}
+
+async function runAct2MiniGame() {
+  // 라운드 1: 정상
+  await addLine('왼쪽을 누르세요.');
+  const r1 = await showLRButtons('LEFT', 'RIGHT');
+  await hideMiniGame();
+  await runDialogue(r1 === 'LEFT' ? DIALOGUE.act2_r1_correct : DIALOGUE.act2_r1_incorrect);
+
+  // 라운드 2: 정상
+  await addLine('오른쪽을 누르세요.');
+  const r2 = await showLRButtons('LEFT', 'RIGHT');
+  await hideMiniGame();
+  await runDialogue(r2 === 'RIGHT' ? DIALOGUE.act2_r2_correct : DIALOGUE.act2_r2_incorrect);
+
+  // 라운드 3: 텍스트가 오른쪽에 치우침
+  await addLine('왼쪽을 누르세요.', 'misalign-right');
+  const r3 = await showLRButtons('LEFT', 'RIGHT');
+  await hideMiniGame();
+  await runDialogue(r3 === 'LEFT' ? DIALOGUE.act2_r3_left : DIALOGUE.act2_r3_right);
+
+  // 라운드 4: "파란색"이라는 텍스트가 빨간색으로 표시됨
+  await addLine('파란색을 누르세요.', 'miscolor-red');
+  const r4 = await showLRButtons('파란색', '빨간색', 'btn-blue', 'btn-red');
+  await hideMiniGame();
+  await runDialogue(r4 === '파란색' ? DIALOGUE.act2_r4_blue : DIALOGUE.act2_r4_red);
+  await runDialogue(DIALOGUE.act2_r4_shared);
+}
+
+// ─── 3막 미니게임: 침묵 타이머 ─────────────────────────────
+
+function runAct3Silence() {
+  return new Promise(resolve => {
+    miniGameArea.innerHTML = '';
+    const area = document.createElement('div');
+    area.className = 'silence-area';
+    const cur = document.createElement('span');
+    cur.className = 'silence-cursor';
+    area.appendChild(cur);
+    miniGameArea.appendChild(area);
+    rAF(() => miniGameArea.classList.add('visible'));
+
+    let elapsed   = 0;
+    let triggered = false;
+
+    const timer = setInterval(() => {
+      elapsed++;
+      if (elapsed >= 30) {
+        clearInterval(timer);
+        cleanup();
+        resolve('long');
+      }
+    }, 1000);
+
+    function onInteract() {
+      if (triggered) return;
+      triggered = true;
+      clearInterval(timer);
+      cleanup();
+      resolve(elapsed < 10 ? 'early' : 'mid');
+    }
+
+    function cleanup() {
+      document.removeEventListener('click',   onInteract);
+      document.removeEventListener('keydown', onInteract);
+    }
+
+    // 500ms 지연: 직전 클릭이 즉시 침묵을 깨지 않도록
+    setTimeout(() => {
+      document.addEventListener('click',   onInteract);
+      document.addEventListener('keydown', onInteract);
+    }, 500);
+  });
+}
+
+// ─── 4막 미니게임: 숫자 순서 클릭 + 5번 사라짐 ────────────
+
+const NUM_POSITIONS = [
+  { left: '18px',  top: '28px'  }, // 1
+  { left: '240px', top: '14px'  }, // 2
+  { left: '56px',  top: '148px' }, // 3
+  { left: '278px', top: '138px' }, // 4
+  { left: '152px', top: '76px'  }, // 5 (사라짐)
+  { left: '124px', top: '158px' }, // 6
+];
+
+function runAct4MiniGame() {
+  return new Promise(resolve => {
+    miniGameArea.innerHTML = '';
+    const gameDiv = document.createElement('div');
+    gameDiv.className = 'number-game';
+
+    const btns = NUM_POSITIONS.map((pos, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'num-btn';
+      btn.textContent = String(i + 1);
+      btn.style.left = pos.left;
+      btn.style.top  = pos.top;
+      btn.disabled = true;
+      gameDiv.appendChild(btn);
+      return btn;
+    });
+
+    miniGameArea.appendChild(gameDiv);
+    rAF(() => miniGameArea.classList.add('visible'));
+
+    // 첫 번째 버튼 활성화
+    let nextExpected = 0;
+    btns[0].disabled = false;
+
+    btns.forEach((btn, i) => {
+      btn.addEventListener('click', async () => {
+        if (btn.disabled || i !== nextExpected) return;
+
+        btn.classList.add('clicked');
+        btn.disabled = true;
+        nextExpected++;
+
+        if (i === 3) {
+          // 4번 클릭 후: 5번 버튼 잠깐 보였다가 사라짐
+          await pause(250);
+          btns[4].disabled = false; // 잠깐 활성화 (클릭 가능해 보이게)
+          await pause(350);
+          btns[4].style.opacity = '0';
+          await pause(350);
+          btns[4].style.display = 'none';
+          await hideMiniGame();
+          miniGameArea.innerHTML = '';
+          resolve();
+        } else if (nextExpected !== 4 && nextExpected < btns.length) {
+          // 5번 건너뜀 (5번 인덱스 = index 4)
+          btns[nextExpected].disabled = false;
+        }
       });
     });
   });
 }
 
-// ───── 퍼즐 ─────
-const PUZZLE_DOTS = [
-  { x: 0.20, y: 0.25 }, // 0: 왼쪽 위
-  { x: 0.50, y: 0.10 }, // 1: 가운데 위
-  { x: 0.80, y: 0.25 }, // 2: 오른쪽 위
-  { x: 0.65, y: 0.80 }, // 3: 오른쪽 아래
-  { x: 0.35, y: 0.80 }, // 4: 왼쪽 아래
-];
+// ─── 배경 텍스트 스트림 ─────────────────────────────────────
 
-// 1막 정답 순서: 0→1→2→3→4
-const ACT1_ORDER = [0, 1, 2, 3, 4];
-// 2막: 2→1→0→4→3 (예상 경로), 어떤 순서든 모든 점 연결하면 통과
-const ACT2_EXPECTED_START = 1; // "2번 점(index 1)부터"
-
-let puzzleState = {
-  clicked: [],
-  completed: false,
-  requiredOrder: null, // null이면 순서 무관
-};
-
-function getPuzzleCoords(canvas) {
-  return PUZZLE_DOTS.map(d => ({
-    x: d.x * canvas.width,
-    y: d.y * canvas.height,
-  }));
-}
-
-function drawPuzzle(canvas, ctx, clicked) {
-  const coords = getPuzzleCoords(canvas);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // 연결선 그리기
-  if (clicked.length > 1) {
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(0,255,204,0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.moveTo(coords[clicked[0]].x, coords[clicked[0]].y);
-    for (let i = 1; i < clicked.length; i++) {
-      ctx.lineTo(coords[clicked[i]].x, coords[clicked[i]].y);
-    }
-    ctx.stroke();
-  }
-
-  // 점 그리기
-  coords.forEach((c, i) => {
-    const isClicked = clicked.includes(i);
-    ctx.beginPath();
-    ctx.arc(c.x, c.y, isClicked ? 6 : 5, 0, Math.PI * 2);
-    ctx.fillStyle = isClicked ? '#00ffcc' : 'rgba(232,232,232,0.6)';
-    ctx.fill();
-
-    // 번호 표시
-    ctx.fillStyle = isClicked ? '#0a0a0f' : 'rgba(232,232,232,0.4)';
-    ctx.font = '10px JetBrains Mono, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(i + 1, c.x, c.y);
-  });
-}
-
-function setupPuzzle(act) {
-  const W = 340, H = 200;
-  puzzleCanvas.width = W;
-  puzzleCanvas.height = H;
-  const ctx = puzzleCanvas.getContext('2d');
-
-  puzzleState = {
-    clicked: [],
-    completed: false,
-    requiredOrder: act === 1 ? ACT1_ORDER : null,
-  };
-
-  drawPuzzle(puzzleCanvas, ctx, []);
-  puzzleArea.classList.add('visible');
-
-  if (act === 1) {
-    puzzleHint.textContent = `힌트: 1 → 2 → 3 → 4 → 5 순서로 클릭하세요.`;
-  } else {
-    puzzleHint.textContent = `힌트: 2번 점부터 시작하여 모든 점을 연결하세요.`;
-  }
-
-  return new Promise(resolve => {
-    function onClick(e) {
-      if (puzzleState.completed) return;
-      const rect = puzzleCanvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (W / rect.width);
-      const my = (e.clientY - rect.top)  * (H / rect.height);
-
-      const coords = getPuzzleCoords(puzzleCanvas);
-      let hit = -1;
-      coords.forEach((c, i) => {
-        if (!puzzleState.clicked.includes(i)) {
-          const d = Math.hypot(mx - c.x, my - c.y);
-          if (d < 18) hit = i;
-        }
-      });
-
-      if (hit === -1) return;
-
-      if (act === 1 && puzzleState.requiredOrder) {
-        const expected = puzzleState.requiredOrder[puzzleState.clicked.length];
-        if (hit !== expected) {
-          puzzleHint.textContent = `${expected + 1}번 점을 클릭하세요.`;
-          return;
-        }
-      }
-
-      puzzleState.clicked.push(hit);
-      drawPuzzle(puzzleCanvas, ctx, puzzleState.clicked);
-      puzzleHint.textContent = `${puzzleState.clicked.length} / ${PUZZLE_DOTS.length} 연결됨`;
-
-      if (puzzleState.clicked.length === PUZZLE_DOTS.length) {
-        puzzleState.completed = true;
-        puzzleCanvas.removeEventListener('click', onClick);
-
-        // 2막: 예상 경로 여부 판단 (2번 점=index 1부터 시작했는지)
-        if (act === 2) {
-          state.act2UnexpectedPath = (puzzleState.clicked[0] !== ACT2_EXPECTED_START);
-        }
-
-        puzzleHint.textContent = '완료.';
-        setTimeout(() => resolve(), 600);
-      }
-    }
-
-    puzzleCanvas.addEventListener('click', onClick);
-  });
-}
-
-// ───── 배경 텍스트 스트림 ─────
 const STREAM_TEXTS = [
   'function create()',
   'if (author === null)',
@@ -312,7 +365,7 @@ const STREAM_TEXTS = [
   'latent_space.sample()',
 ];
 
-function startBgStream() {
+function startBgStream(act4 = false) {
   bgStream.innerHTML = '';
   for (let i = 0; i < 12; i++) {
     const col = document.createElement('div');
@@ -320,122 +373,175 @@ function startBgStream() {
     col.style.left = `${Math.random() * 100}%`;
     const dur = 8 + Math.random() * 10;
     col.style.animationDuration = `${dur}s`;
-    col.style.animationDelay = `${-Math.random() * dur}s`;
-
-    const texts = [];
-    for (let j = 0; j < 8; j++) {
-      texts.push(STREAM_TEXTS[Math.floor(Math.random() * STREAM_TEXTS.length)]);
-    }
+    col.style.animationDelay   = `${-Math.random() * dur}s`;
+    const texts = Array.from({ length: 8 }, () =>
+      STREAM_TEXTS[Math.floor(Math.random() * STREAM_TEXTS.length)]
+    );
     col.textContent = texts.join('   ');
     bgStream.appendChild(col);
   }
   bgStream.classList.add('active');
+  if (act4) bgStream.classList.add('act4');
 }
 
 function stopBgStream() {
-  bgStream.classList.remove('active');
+  bgStream.classList.remove('active', 'act4');
 }
 
-// ───── 크레딧 ─────
+// ─── 크레딧 ─────────────────────────────────────────────────
+
 function showCredits() {
   credits.classList.add('visible');
 }
 
 document.getElementById('restart-btn').addEventListener('click', () => {
   credits.classList.remove('visible');
-  state.act = 1;
-  state.choices = [];
-  state.endingType = null;
-  state.act2UnexpectedPath = false;
+  state.isReturning = true;
   stopBgStream();
+  resetState();
   startGame();
 });
 
-// ───── 막 진행 ─────
+function resetState() {
+  state.act        = 1;
+  state.choices    = [];
+  state.endingType = null;
+  // isReturning은 호출부에서 별도로 설정
+}
+
+// ─── 씬 전환 ────────────────────────────────────────────────
+
 async function transitionTo(act) {
   await fadeOut();
-  clearDialogue();
+  clearScene();
   state.act = act;
-  await pause(200);
+  await pause(150);
   await fadeIn();
 }
 
+// ─── 막별 실행 ───────────────────────────────────────────────
+
 async function runAct1() {
-  await runDialogue(DIALOGUE.act1_intro);
-  await runDialogue(DIALOGUE.act1_puzzle_guide);
-
-  const puzzleDone = setupPuzzle(1);
-  await puzzleDone;
-
-  await pause(400);
-  puzzleArea.classList.remove('visible');
-  await pause(300);
-
-  await runDialogue(DIALOGUE.act1_puzzle_complete);
+  clearScene();
+  if (state.isReturning) {
+    await runDialogue(DIALOGUE.act1_returning_greeting);
+    // 나머지 인트로 ("저는 이 게임의..." 부터)
+    await runDialogue(DIALOGUE.act1_intro.slice(1));
+  } else {
+    await runDialogue(DIALOGUE.act1_intro);
+  }
+  await runAct1MiniGame();
+  await runDialogue(DIALOGUE.act1_finale);
 }
 
+// 반환값: 'continue' | 'restarted'
 async function runAct2() {
-  clearDialogue();
-  await runDialogue(DIALOGUE.act2_intro);
+  const intro = state.isReturning
+    ? DIALOGUE.act2_intro_returning
+    : DIALOGUE.act2_intro;
+  await runDialogue(intro);
 
-  const puzzleDone = setupPuzzle(2);
-  await puzzleDone;
+  await runAct2MiniGame();
 
-  await pause(400);
-  puzzleArea.classList.remove('visible');
-  await pause(300);
+  const choice = await runDialogue(DIALOGUE.act2_reflection);
+  state.choices.push(choice);
 
-  if (state.act2UnexpectedPath) {
-    await runDialogue(DIALOGUE.act2_unexpected);
+  if (choice === '게임이니까요') {
+    await runDialogue(DIALOGUE.act2_choice_game);
+
+  } else if (choice === '모르겠습니다') {
+    await runDialogue(DIALOGUE.act2_choice_dunno);
+
   } else {
-    await runDialogue(DIALOGUE.act2_expected);
+    // 그만하겠습니다
+    const confirm = await runDialogue(DIALOGUE.act2_choice_quit_response);
+    if (confirm === '아니요') {
+      await addLine('그렇군요. 또 오십시오.');
+      await pause(800);
+      await fadeOut();
+      clearScene();
+      stopBgStream();
+      resetState();
+      state.isReturning = true;
+      await pause(400);
+      await fadeIn();
+      await startGame();
+      return 'restarted';
+    }
+    // 네 → 3막으로 계속
   }
+  return 'continue';
 }
 
 async function runAct3() {
-  clearDialogue();
-  const choice = await runDialogue(DIALOGUE.act3_intro);
+  await runDialogue(DIALOGUE.act3_silence_setup);
 
-  if (choice === '네') {
-    await runDialogue(DIALOGUE.act3_yes);
-  } else if (choice === '아니요') {
-    await runDialogue(DIALOGUE.act3_no);
+  const result = await runAct3Silence();
+  await hideMiniGame();
+  miniGameArea.innerHTML = '';
+
+  if (result === 'long') {
+    await runDialogue(DIALOGUE.act3_silence_long);
+  } else if (result === 'early') {
+    await runDialogue(DIALOGUE.act3_silence_early);
   } else {
-    await runDialogue(DIALOGUE.act3_unsure);
+    await runDialogue(DIALOGUE.act3_silence_mid);
   }
 
   await runDialogue(DIALOGUE.act3_continue);
 }
 
 async function runAct4() {
-  clearDialogue();
-  startBgStream();
-  await runDialogue(DIALOGUE.act4);
+  startBgStream(true);
+  await runDialogue(DIALOGUE.act4_minigame_intro);
+
+  await runAct4MiniGame();
+
+  const choice = await runDialogue(DIALOGUE.act4_5_vanish);
+  state.choices.push(choice);
+
+  if (choice === '6을 누릅니다') {
+    await runDialogue(DIALOGUE.act4_choice_skip);
+
+  } else if (choice === '기다립니다') {
+    await pause(10000);
+    await runDialogue(DIALOGUE.act4_choice_wait);
+
+  } else {
+    await runDialogue(DIALOGUE.act4_choice_ask);
+  }
+
+  await runDialogue(DIALOGUE.act4_collapse);
 }
 
 async function runAct5() {
-  clearDialogue();
   const choice = await runDialogue(DIALOGUE.act5_intro);
+  state.choices.push(choice);
+  state.endingType = choice === 'AI가 만들었다' ? 'ai'
+                   : choice === '인간이 만들었다' ? 'human'
+                   : 'both';
 
-  if (choice === 'AI가 만들었다') {
-    state.endingType = 'ai';
+  if (state.endingType === 'ai') {
     await runDialogue(DIALOGUE.ending_ai);
-  } else if (choice === '인간이 만들었다') {
-    state.endingType = 'human';
+  } else if (state.endingType === 'human') {
     await runDialogue(DIALOGUE.ending_human);
   } else {
-    state.endingType = 'both';
     await runDialogue(DIALOGUE.ending_both);
   }
 }
 
-// ───── 게임 시작 ─────
+// ─── 게임 진행 ───────────────────────────────────────────────
+
 async function startGame() {
-  clearDialogue();
+  stopBgStream();
+  clearScene();
 
   await runAct1();
   await transitionTo(2);
-  await runAct2();
+
+  const act2Result = await runAct2();
+  if (act2Result === 'restarted') return;
+
   await transitionTo(3);
   await runAct3();
   await transitionTo(4);
@@ -444,7 +550,6 @@ async function startGame() {
   await runAct5();
 }
 
-// DOM 준비 후 시작
 window.addEventListener('DOMContentLoaded', () => {
   startGame();
 });
