@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AUTHORED</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- 배경 텍스트 스트림 (4막 활성화) -->
+  <div id="bg-stream"></div>
+
+  <!-- 메인 씬 -->
+  <div id="scene">
+    <div id="game-container">
+      <div id="dialogue-area"></div>
+
+      <!-- 퍼즐 캔버스 -->
+      <div id="puzzle-area">
+        <canvas id="puzzle-canvas"></canvas>
+        <div id="puzzle-hint"></div>
+      </div>
+
+      <!-- 버튼 (Continue / 선택지) -->
+      <div id="button-area"></div>
+    </div>
+  </div>
+
+  <!-- 크레딧 화면 -->
+  <div id="credits">
+    <div id="credits-inner">
+      <h1>AUTHORED</h1>
+
+      <div class="credit-rows">
+        <div class="credit-row">
+          <span class="label">기획</span>
+          <span class="dash">————————————————</span>
+          <span class="value">인간</span>
+        </div>
+        <div class="credit-row">
+          <span class="label">코드</span>
+          <span class="dash">————————————————</span>
+          <span class="value">AI</span>
+        </div>
+        <div class="credit-row">
+          <span class="label">텍스트</span>
+          <span class="dash">——————————————</span>
+          <span class="value">AI + 인간</span>
+        </div>
+        <div class="credit-row">
+          <span class="label">퍼즐 디자인</span>
+          <span class="dash">————————————</span>
+          <span class="value unknown">?</span>
+        </div>
+        <div class="credit-row">
+          <span class="label">이 게임의 창작자</span>
+          <span class="dash">——————————</span>
+          <span class="value unknown">?</span>
+        </div>
+      </div>
+
+      <p class="thanks">플레이해주셔서 감사합니다.</p>
+      <p class="signature">— AI, 2026</p>
+
+      <button id="restart-btn">[ 처음부터 다시 ]</button>
+    </div>
+  </div>
+
+  <script src="dialogue.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
