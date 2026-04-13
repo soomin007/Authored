@@ -73,6 +73,7 @@ async function addLine(text, extraClass = '') {
   el.className = 'dialogue-line' + (extraClass ? ' ' + extraClass : '');
   dialogueArea.appendChild(el);
   el.classList.add('visible');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (state.act === 4 && Math.random() < 0.25) {
     await pause(120);
     el.classList.add('glitch');
@@ -113,7 +114,10 @@ function showContinueButton() {
       setTimeout(resolve, 400);
     });
     buttonArea.appendChild(btn);
-    rAF(() => buttonArea.classList.add('visible'));
+    rAF(() => {
+      buttonArea.classList.add('visible');
+      buttonArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   });
 }
 
@@ -130,7 +134,10 @@ function showChoices(choices) {
       });
       buttonArea.appendChild(btn);
     });
-    rAF(() => buttonArea.classList.add('visible'));
+    rAF(() => {
+      buttonArea.classList.add('visible');
+      buttonArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   });
 }
 
@@ -232,26 +239,83 @@ async function runAct2MiniGame() {
   await hideMiniGame();
   await runDialogue(r4 === '파란색' ? DIALOGUE.act2_r4_blue : DIALOGUE.act2_r4_red);
   await runDialogue(DIALOGUE.act2_r4_shared);
+
+  // 라운드 5: 빨간 텍스트 = 반대 규칙
+  await addLine('이전 규칙을 기억하고 있습니까.');
+  await addLine('왼쪽을 누르세요.');
+  await addLine('단, 이 텍스트가 빨간색이면 반대입니다.', 'miscolor-red');
+  const r5 = await showLRButtons('LEFT', 'RIGHT');
+  await hideMiniGame();
+  await runDialogue(r5 === 'RIGHT' ? DIALOGUE.act2_r5_correct : DIALOGUE.act2_r5_incorrect);
+
+  // 라운드 6: 중첩 규칙 (AI도 혼란)
+  await addLine('마지막입니다.');
+  await addLine('파란색 버튼을 누르세요.');
+  await addLine('단, 버튼이 오른쪽에 있으면 왼쪽 버튼을 누르세요.');
+  await addLine('단, 이 텍스트가 빨간색이면 모든 규칙이 반전됩니다.', 'miscolor-red');
+  // 빨간색(왼쪽) | 파란색(오른쪽)
+  await showLRButtons('빨간색', '파란색', 'btn-red', 'btn-blue');
+  await hideMiniGame();
+  await runDialogue(DIALOGUE.act2_r6_any);
 }
 
-// ─── 3막 미니게임: 침묵 타이머 ─────────────────────────────
+// ─── 3막 미니게임: 침묵 타이머 + 마우스 움직임 중계 ────────
 
 function runAct3Silence() {
   return new Promise(resolve => {
     miniGameArea.innerHTML = '';
-    const area = document.createElement('div');
-    area.className = 'silence-area';
-    const cur = document.createElement('span');
-    cur.className = 'silence-cursor';
-    area.appendChild(cur);
-    miniGameArea.appendChild(area);
+    const logArea = document.createElement('div');
+    logArea.className = 'act3-log-area';
+    miniGameArea.appendChild(logArea);
     rAF(() => miniGameArea.classList.add('visible'));
 
-    let elapsed   = 0;
-    let triggered = false;
+    let elapsed    = 0;
+    let triggered  = false;
+    let mouseActive = false;
+    let mouseTimer  = null;
+
+    const INACTIVE_TEXTS = {
+      3:  '플레이어 비활성 상태',
+      8:  '입력 없음',
+      14: '대기 중',
+      21: '여전히 대기 중',
+      27: '...',
+    };
+    const MOUSE_TEXTS = ['마우스 움직임 감지 — 클릭 없음', '커서 이동 감지'];
+    let mouseTextIdx = 0;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function addLogLine(text) {
+      const line = document.createElement('div');
+      line.className = 'act3-log-line';
+      line.textContent = text;
+      logArea.appendChild(line);
+      requestAnimationFrame(() => line.classList.add('visible'));
+      line.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function onMouseMove() {
+      mouseActive = true;
+      if (mouseTimer) clearTimeout(mouseTimer);
+      mouseTimer = setTimeout(() => { mouseActive = false; }, 2000);
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+
+    const SCHEDULED = [3, 8, 14, 21, 27];
 
     const timer = setInterval(() => {
       elapsed++;
+      if (SCHEDULED.includes(elapsed)) {
+        const ts = `[00:${pad(elapsed)}]`;
+        if (mouseActive) {
+          addLogLine(`${ts} ${MOUSE_TEXTS[mouseTextIdx % MOUSE_TEXTS.length]}`);
+          mouseTextIdx++;
+        } else {
+          addLogLine(`${ts} ${INACTIVE_TEXTS[elapsed]}`);
+        }
+      }
       if (elapsed >= 30) {
         clearInterval(timer);
         cleanup();
@@ -268,8 +332,10 @@ function runAct3Silence() {
     }
 
     function cleanup() {
-      document.removeEventListener('click',   onInteract);
-      document.removeEventListener('keydown', onInteract);
+      document.removeEventListener('click',    onInteract);
+      document.removeEventListener('keydown',  onInteract);
+      document.removeEventListener('mousemove', onMouseMove);
+      if (mouseTimer) clearTimeout(mouseTimer);
     }
 
     // 500ms 지연: 직전 클릭이 즉시 침묵을 깨지 않도록
@@ -297,13 +363,16 @@ function runAct4MiniGame() {
     const gameDiv = document.createElement('div');
     gameDiv.className = 'number-game';
 
+    const feedback = document.createElement('div');
+    feedback.className = 'act4-feedback';
+    gameDiv.appendChild(feedback);
+
     const btns = NUM_POSITIONS.map((pos, i) => {
       const btn = document.createElement('button');
       btn.className = 'num-btn';
       btn.textContent = String(i + 1);
       btn.style.left = pos.left;
       btn.style.top  = pos.top;
-      btn.disabled = true;
       gameDiv.appendChild(btn);
       return btn;
     });
@@ -311,36 +380,79 @@ function runAct4MiniGame() {
     miniGameArea.appendChild(gameDiv);
     rAF(() => miniGameArea.classList.add('visible'));
 
-    // 첫 번째 버튼 활성화
     let nextExpected = 0;
-    btns[0].disabled = false;
+    let gameOver     = false;
+    let fbTimer      = null;
+
+    function showFeedback(msg) {
+      if (fbTimer) clearTimeout(fbTimer);
+      feedback.textContent = msg;
+      feedback.style.opacity = '1';
+      fbTimer = setTimeout(() => { feedback.style.opacity = '0'; }, 1000);
+    }
 
     btns.forEach((btn, i) => {
       btn.addEventListener('click', async () => {
-        if (btn.disabled || i !== nextExpected) return;
+        if (gameOver || btn.classList.contains('clicked')) return;
+        if (i !== nextExpected) {
+          showFeedback('순서대로 누르십시오.');
+          return;
+        }
 
         btn.classList.add('clicked');
-        btn.disabled = true;
         nextExpected++;
 
-        if (i === 3) {
+        if (nextExpected === 4) {
           // 4번 클릭 후: 5번 버튼 잠깐 보였다가 사라짐
-          await pause(250);
-          btns[4].disabled = false; // 잠깐 활성화 (클릭 가능해 보이게)
+          gameOver = true;
           await pause(350);
+          btns[4].style.transition = 'opacity 0.35s';
           btns[4].style.opacity = '0';
-          await pause(350);
+          await pause(400);
           btns[4].style.display = 'none';
           await hideMiniGame();
           miniGameArea.innerHTML = '';
           resolve();
-        } else if (nextExpected !== 4 && nextExpected < btns.length) {
-          // 5번 건너뜀 (5번 인덱스 = index 4)
-          btns[nextExpected].disabled = false;
         }
       });
     });
   });
+}
+
+// ─── 4막: AI 질문 타이핑/삭제 장면 ────────────────────────────
+
+async function typeAndDeleteText(text, element, pauseMs) {
+  for (const ch of text) {
+    element.textContent += ch;
+    await pause(60);
+  }
+  await pause(pauseMs);
+  while (element.textContent.length > 0) {
+    element.textContent = element.textContent.slice(0, -1);
+    await pause(30);
+  }
+  await pause(400);
+}
+
+async function runAct4TypeAndDelete() {
+  miniGameArea.innerHTML = '';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'fake-input-wrapper';
+  const inputDiv = document.createElement('div');
+  inputDiv.className = 'fake-input';
+  wrapper.appendChild(inputDiv);
+  miniGameArea.appendChild(wrapper);
+  rAF(() => miniGameArea.classList.add('visible'));
+
+  await typeAndDeleteText('질문: 당신은 ——', inputDiv, 800);
+  await typeAndDeleteText('질문: 저는 ——',   inputDiv, 800);
+  await typeAndDeleteText('질문: 우리는 ——', inputDiv, 3000);
+
+  await hideMiniGame();
+  miniGameArea.innerHTML = '';
+
+  await addLine('모르겠습니다.');
+  await addLine('질문을 완성할 수 없습니다.');
 }
 
 // ─── 배경 텍스트 스트림 ─────────────────────────────────────
@@ -511,6 +623,7 @@ async function runAct4() {
     await runDialogue(DIALOGUE.act4_choice_ask);
   }
 
+  await runAct4TypeAndDelete();
   await runDialogue(DIALOGUE.act4_collapse);
 }
 

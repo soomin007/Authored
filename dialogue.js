@@ -74,6 +74,16 @@ const DIALOGUE = {
     { text: "그게 인간입니까, 아니면 그냥 클릭입니까.", type: "ai" },
   ],
 
+  act2_r5_correct:   [{ text: "규칙을 이해하셨군요.", type: "ai" }],
+  act2_r5_incorrect: [{ text: "텍스트 색을 확인하십시오.", type: "ai" }],
+
+  act2_r6_any: [
+    { text: "...", type: "ai" },
+    { type: "pause", duration: 1500 },
+    { text: "저도 헷갈립니다.", type: "ai" },
+    { text: "이 규칙은 제가 설계했는데.", type: "ai" },
+  ],
+
   act2_reflection: [
     { text: "...", type: "ai" },
     { type: "pause", duration: 2000 },
