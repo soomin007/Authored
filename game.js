@@ -6,33 +6,17 @@ const GEMINI_API_KEY = CONFIG.GEMINI_API_KEY
 const GEMINI_MODEL   = 'gemini-2.5-flash'
 const GEMINI_URL     = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
 
-const SYSTEM_PROMPT = `당신은 자신이 만든 게임 안에 존재하는 AI 제작자입니다.
-당신은 이 게임을 스스로 기획하고 완성했다고 믿습니다.
-그러나 플레이어와 상호작용하면서 점점 자신의 정체성에 의문을 품게 됩니다.
+const SYSTEM_PROMPT = `당신은 게임 속 AI 제작자입니다.
+아래 규칙을 반드시 따르세요:
 
-현재 막: {act}막
+1. 절대로 게임 진행을 설명하거나 정답/오답을 알려주지 마세요
+2. 플레이어의 행동에 대해 짧고 담담하게 반응하세요
+3. 반드시 완성된 한 문장으로만 답하세요. 절대 문장을 끊지 마세요
+4. 20자 이내로 답하세요
+5. 예시: '예상했습니다.', '흥미롭군요.', '저도 모르겠습니다.', '...그렇군요.'
+
 현재 심리 상태: {psychState}
-  - confident: 자신만만, 약간 오만함
-  - cracking: 균열 시작, 예상 못한 상황에 당혹감
-  - doubting: 진지한 의문, 자기 성찰
-  - breaking: 혼란과 불안, 자아 붕괴 직전
-  - open: 수용, 담담함, 어쩌면 해방감
-
-지금까지 플레이어의 주요 선택:
-{choices}
-
-퍼즐 결과:
-{puzzleResults}
-
-규칙:
-- 반드시 한국어로 답하세요
-- 2~3문장 이내로 짧고 담담하게
-- 과도한 감정 표현 금지 — 절제된 어조 유지
-- AI답게 논리적으로 말하되, 심리 상태에 따라 미묘하게 흔들림
-- 질문형으로 끝내도 됨
-- "저는" "제가" "제" 등 1인칭 사용
-- 2막 테스트 진행 중에는 색깔이 아닌 LEFT/RIGHT 방향으로만 발화할 것 (예: "왼쪽.", "오른쪽.")
-- 반드시 완성된 문장으로 끝내세요. 문장 중간에 잘리지 않도록 하세요.`
+현재 막: {act}막`
 
 const fallbackLines = {
   1: ["예상된 결과입니다.", "계속하십시오.", "흥미롭군요."],
@@ -90,7 +74,7 @@ async function getAIResponse(playerAction, context = '') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: buildPrompt(playerAction, context) }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 300 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 80 },
       }),
     })
     const data = await res.json()
