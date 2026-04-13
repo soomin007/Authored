@@ -3,7 +3,7 @@
 // ─── Gemini API 설정 ──────────────────────────────────────────
 // API 키는 config.js 에서 주입 (config.js는 .gitignore 처리됨)
 const GEMINI_API_KEY = CONFIG.GEMINI_API_KEY
-const GEMINI_MODEL   = 'gemini-3-flash'
+const GEMINI_MODEL   = 'gemini-2.5-flash'
 const GEMINI_URL     = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
 
 const SYSTEM_PROMPT = `당신은 자신이 만든 게임 안에 존재하는 AI 제작자입니다.
@@ -687,12 +687,13 @@ function runAct4MiniGame() {
         nextExpected++
 
         if (nextExpected === 4) {
-          // 4번 클릭 후 → 5번 사라짐
+          // 4번 클릭 후 → 5번 즉시 disabled, 잠깐 보인 뒤 사라짐
           gameOver = true
-          await pause(350)
-          btns[4].style.transition = 'opacity 0.35s'
+          btns[4].disabled = true          // 즉시 클릭 차단
+          await pause(100)                 // 눈에 띄지만 누를 수 없는 시간
+          btns[4].style.transition = 'opacity 0.2s'
           btns[4].style.opacity    = '0'
-          await pause(400)
+          await pause(250)
           btns[4].style.display    = 'none'
           await hideMiniGame()
           miniGameArea.innerHTML = ''
