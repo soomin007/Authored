@@ -148,39 +148,82 @@ body {
 
 #mini-game-area.visible { opacity: 1; }
 
-/* 1막: 원형 버튼 */
-.circle-btn-wrapper {
+/* 1막: 패턴 기억 게임 */
+.pattern-game {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  height: 130px;
+  gap: 16px;
+  padding: 20px 0;
 }
 
-.circle-btn {
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
+.pattern-status {
+  font-size: 13px;
+  color: rgba(232, 232, 232, 0.5);
+  letter-spacing: 0.05em;
+  min-height: 1.5em;
+  text-align: center;
+}
+
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 8px;
+}
+
+.pattern-cell {
+  width: 56px;
+  height: 56px;
   background: transparent;
-  border: 2px solid var(--ai);
-  color: var(--ai);
+  border: 1px solid rgba(232, 232, 232, 0.3);
+  color: var(--text);
   font-family: var(--font);
-  font-size: 26px;
+  font-size: 13px;
   cursor: pointer;
-  transition: transform 0.35s ease, background 0.2s;
-  transform-origin: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
   padding: 0;
 }
 
-.circle-btn:hover:not(:disabled) {
-  background: rgba(0, 255, 204, 0.08);
+.pattern-cell:hover:not(:disabled):not(.clicked):not(.highlight):not(.wrong) {
+  border-color: rgba(232, 232, 232, 0.6);
+  background: rgba(232, 232, 232, 0.04);
 }
 
-.circle-btn:disabled {
+.pattern-cell.highlight {
+  border-color: var(--ai);
+  background: rgba(0, 255, 204, 0.18);
+}
+
+.pattern-cell.clicked {
+  border-color: rgba(0, 255, 204, 0.5);
+  background: rgba(0, 255, 204, 0.08);
   cursor: default;
-  opacity: 0.3;
+}
+
+.pattern-cell.wrong {
+  border-color: rgba(255, 85, 85, 0.7);
+  background: rgba(255, 85, 85, 0.1);
+}
+
+/* 2막: 규칙 누적 게임 */
+.act2-game {
+  padding: 12px 0;
+}
+
+.act2-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 14px;
+  border-left: 1px solid rgba(0, 255, 204, 0.25);
+  margin-bottom: 10px;
+}
+
+.act2-rule {
+  font-size: 12px;
+  color: rgba(0, 255, 204, 0.65);
+  letter-spacing: 0.03em;
 }
 
 /* 2막: LEFT / RIGHT 버튼 영역 */
