@@ -31,7 +31,8 @@ const SYSTEM_PROMPT = `당신은 자신이 만든 게임 안에 존재하는 AI 
 - AI답게 논리적으로 말하되, 심리 상태에 따라 미묘하게 흔들림
 - 질문형으로 끝내도 됨
 - "저는" "제가" "제" 등 1인칭 사용
-- 2막 테스트 진행 중에는 색깔이 아닌 LEFT/RIGHT 방향으로만 발화할 것 (예: "왼쪽.", "오른쪽.")`
+- 2막 테스트 진행 중에는 색깔이 아닌 LEFT/RIGHT 방향으로만 발화할 것 (예: "왼쪽.", "오른쪽.")
+- 반드시 완성된 문장으로 끝내세요. 문장 중간에 잘리지 않도록 하세요.`
 
 const fallbackLines = {
   1: ["예상된 결과입니다.", "계속하십시오.", "흥미롭군요."],
@@ -89,7 +90,7 @@ async function getAIResponse(playerAction, context = '') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: buildPrompt(playerAction, context) }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 150 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 300 },
       }),
     })
     const data = await res.json()
