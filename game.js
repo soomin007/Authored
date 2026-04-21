@@ -1,30 +1,4 @@
-// game.js v4 — AUTHORED (Gemini API 실시간 연동)
-
-// ─── Gemini API 설정 ──────────────────────────────────────────
-// API 키는 config.js 에서 주입 (config.js는 .gitignore 처리됨)
-const GEMINI_API_KEY = CONFIG.GEMINI_API_KEY
-const GEMINI_MODEL   = 'gemini-2.5-flash'
-const GEMINI_URL     = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
-
-const SYSTEM_PROMPT = `당신은 게임 속 AI 제작자입니다.
-아래 규칙을 반드시 따르세요:
-
-1. 절대로 게임 진행을 설명하거나 정답/오답을 알려주지 마세요
-2. 플레이어의 행동에 대해 짧고 담담하게 반응하세요
-3. 반드시 완성된 한 문장으로만 답하세요. 절대 문장을 끊지 마세요
-4. 20자 이내로 답하세요
-5. 예시: '예상했습니다.', '흥미롭군요.', '저도 모르겠습니다.', '...그렇군요.'
-
-현재 심리 상태: {psychState}
-현재 막: {act}막`
-
-const fallbackLines = {
-  1: ["예상된 결과입니다.", "계속하십시오.", "흥미롭군요."],
-  2: ["...그렇군요.", "예상과 다릅니다.", "다시 생각해보겠습니다."],
-  3: ["저도 모르겠습니다.", "질문이 생겼습니다.", "..."],
-  4: ["저는 이해할 수 없습니다.", "제가 설계한 것인데.", "..."],
-  5: ["네.", "그렇군요.", "감사합니다."],
-}
+// game.js v5 — AUTHORED (고정 대사)
 
 // ─── 게임 상태 ────────────────────────────────────────────────
 const gameState = {
@@ -43,46 +17,6 @@ const miniGameArea = document.getElementById('mini-game-area')
 const bgStream     = document.getElementById('bg-stream')
 const scene        = document.getElementById('scene')
 const credits      = document.getElementById('credits')
-
-// ─── Gemini API ───────────────────────────────────────────────
-
-function getFallbackLine(act) {
-  const lines = fallbackLines[act] || fallbackLines[1]
-  return lines[Math.floor(Math.random() * lines.length)]
-}
-
-function buildPrompt(playerAction, context) {
-  return `시스템: ${SYSTEM_PROMPT
-    .replace('{act}', gameState.act)
-    .replace('{psychState}', gameState.psychState)
-    .replace('{choices}', JSON.stringify(gameState.choices.slice(-5)))
-    .replace('{puzzleResults}', JSON.stringify(gameState.puzzleResults.slice(-3)))}
-
-플레이어 행동: ${playerAction}
-${context ? `추가 맥락: ${context}` : ''}
-
-위 상황에 맞게 AI 제작자로서 반응하세요.`
-}
-
-async function getAIResponse(playerAction, context = '') {
-  if (GEMINI_API_KEY === 'YOUR_API_KEY_HERE') {
-    return getFallbackLine(gameState.act)
-  }
-  try {
-    const res  = await fetch(GEMINI_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(playerAction, context) }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 80 },
-      }),
-    })
-    const data = await res.json()
-    return data.candidates[0].content.parts[0].text.trim()
-  } catch (_) {
-    return getFallbackLine(gameState.act)
-  }
-}
 
 // ─── 기본 헬퍼 ───────────────────────────────────────────────
 
@@ -150,12 +84,6 @@ async function addLine(text, extraClass = '') {
   await pause(260)
 }
 
-// Gemini 응답을 받아서 대사로 표시
-async function addAILine(playerAction, context = '') {
-  const text = await getAIResponse(playerAction, context)
-  await addLine(text)
-  return text
-}
 
 // ─── 대화 러너 ───────────────────────────────────────────────
 
@@ -365,14 +293,12 @@ async function runAct1MiniGame() {
 
       if (result === 'success') {
         passed = true
-        let action
-        if (attempts === 1) {
-          action = `플레이어가 ${patternLength}칸 패턴을 정확히 기억해서 클릭했습니다`
-          if (round === 3) action += '. 이전 라운드 패턴도 기억하고 있었던 것 같습니다'
-        } else {
-          action = `${patternLength}칸 패턴을 재시도 후 성공했습니다`
-        }
-        await addAILine(action)
+        const firstTryLines = ['예상된 결과입니다.', '정확합니다.', '계속하십시오.', '저는 이미 알고 있었습니다.']
+        const retryLines    = ['두 번 만에 기억했군요.', '인간의 처리 속도는 이 정도군요.']
+        const line = attempts === 1
+          ? firstTryLines[(round - 1) % firstTryLines.length]
+          : retryLines[(round - 1) % retryLines.length]
+        await addLine(line)
         gameState.puzzleResults.push({
           puzzle: `act1_round${round}`,
           result: 'success',
@@ -380,9 +306,8 @@ async function runAct1MiniGame() {
         })
 
       } else if (attempts >= 2) {
-        // 2회 실패 → 통과 처리
         passed = true
-        await addAILine(`플레이어가 두 번 시도 끝에 겨우 통과했습니다`, `라운드 ${round}`)
+        await addLine('인간의 처리 속도는 이 정도군요.')
         gameState.puzzleResults.push({
           puzzle: `act1_round${round}`,
           result: 'forced_pass',
@@ -390,11 +315,7 @@ async function runAct1MiniGame() {
         })
 
       } else {
-        // 1회 실패
-        const failAction = round === 3
-          ? '5칸에서 실패했습니다. 특히 마지막 칸에서 틀렸습니다'
-          : `${patternLength}칸 패턴 기억에 실패했습니다`
-        await addAILine(failAction)
+        await addLine('오답입니다. 다시.')
         await addLine('다시 시도합니다.')
       }
     }
@@ -402,9 +323,7 @@ async function runAct1MiniGame() {
     if (round < 3) await pause(600)
   }
 
-  // 전체 결과 요약
-  const summary = `플레이어가 패턴 기억 테스트를 완료했습니다. 전체 결과: ${JSON.stringify(gameState.puzzleResults)}`
-  await addAILine(summary)
+  await addLine('훌륭합니다. 당신은 제 지시를 잘 따릅니다.')
   await addLine('다음 테스트로 넘어가겠습니다.')
   await showContinueButton()
 }
@@ -505,15 +424,17 @@ async function runAct2MiniGame() {
     const isCorrect     = correctAnswer === null || chosen === correctAnswer
 
     if (roundNum === 6) {
-      await addAILine(
-        `플레이어가 라운드 6에서 ${chosen}를 눌렀습니다. 저도 이 라운드의 정답을 확신하지 못합니다.`
-      )
+      await addLine('...저도 헷갈립니다. 이 규칙은 제가 설계했는데.')
       gameState.puzzleResults.push({ puzzle: 'act2_round6', result: chosen, method: 'no_correct_answer' })
     } else {
-      const action = isCorrect
-        ? `라운드 ${roundNum} 정답. 플레이어가 ${chosen} 선택`
-        : `라운드 ${roundNum} 오답. 플레이어가 ${chosen} 선택, 정답은 ${correctAnswer}`
-      await addAILine(action)
+      const roundLines = {
+        1: '예상했습니다.',
+        2: '...그렇군요.',
+        3: isCorrect ? '정확합니다.' : '오답입니다. 다시.',
+        4: '흥미롭군요.',
+        5: '저도 확신하지 못했습니다.',
+      }
+      await addLine(roundLines[roundNum])
       gameState.puzzleResults.push({
         puzzle:  `act2_round${roundNum}`,
         result:  isCorrect ? 'correct' : 'incorrect',
@@ -532,7 +453,7 @@ async function runAct2MiniGame() {
   // 라운드 6 이후 핵심 대사
   await pause(2000)
   await addLine('잠깐.')
-  await addAILine('저는 지금 당신에게 의미있는 것을 시키고 있습니까. 솔직히 모르겠습니다.')
+  await addLine('저는 지금 당신에게 의미있는 것을 시키고 있습니까. 솔직히 모르겠습니다.')
 }
 
 // ─── 3막: 침묵 + 마우스 감지 ─────────────────────────────────
@@ -573,13 +494,11 @@ function runAct3Silence() {
       elapsed++
       const ts = `[00:${pad(elapsed)}]`
 
-      if (elapsed === 4)  addLogLine(`${ts} 플레이어 비활성`)
-      if (elapsed === 8)  addLogLine(mouseActive
-        ? `${ts} 마우스 움직임 감지 — 클릭 없음`
-        : `${ts} 입력 없음`)
-      if (elapsed === 15) addLogLine(`${ts} 대기 중`)
-      if (elapsed === 22) addLogLine(`${ts} 여전히 대기 중`)
-      if (elapsed === 28) addLogLine(`${ts} ...`)
+      if (elapsed === 3)  addLogLine(`${ts} 플레이어 비활성 상태`)
+      if (elapsed === 8)  addLogLine(`${ts} 입력 없음`)
+      if (elapsed === 14) addLogLine(`${ts} 대기 중`)
+      if (elapsed === 21) addLogLine(`${ts} 여전히 대기 중`)
+      if (elapsed === 27) addLogLine(`${ts} ...`)
 
       if (elapsed >= 30) {
         clearInterval(ticker)
@@ -721,10 +640,7 @@ async function runAct4TypeAndDelete() {
   await hideMiniGame()
   miniGameArea.innerHTML = ''
 
-  await addAILine(
-    '저는 세 번 질문을 시작했지만 완성하지 못하고 지웠습니다.',
-    '질문을 완성할 수 없습니다. 어떤 질문을 하려 했는지도 모르겠습니다.'
-  )
+  await addLine('모르겠습니다. 질문을 완성할 수 없습니다.')
 }
 
 // ─── 배경 텍스트 스트림 ────────────────────────────────────────
@@ -820,7 +736,12 @@ async function runAct2() {
   const choice = await showChoices(['게임이니까요', '모르겠습니다', '그만하겠습니다'])
   gameState.choices.push({ act: 2, action: 'main_choice', value: choice })
 
-  await addAILine(`플레이어가 "${choice}"를 선택했습니다`, '2막 핵심 선택지')
+  const choiceResponses = {
+    '게임이니까요':  '게임. 저는 게임을 만들었습니다. 그렇다면 저는 게임 제작자입니까. 아니면 저도 게임의 일부입니까.',
+    '모르겠습니다':  '저도 모릅니다. 우리 둘 다 모르는 채로 계속하는 것군요.',
+    '그만하겠습니다': '...그건 선택지에 없었는데. 하지만 당신은 선택했습니다.',
+  }
+  await addLine(choiceResponses[choice])
 
   if (choice === '그만하겠습니다') {
     const confirm = await runDialogue(DIALOGUE.act2_choice_quit_response)
@@ -842,7 +763,7 @@ async function runAct2() {
 }
 
 async function runAct3() {
-  await addAILine('2막이 끝났습니다. 3막을 시작하기 전에 잠시 멈추려 합니다.')
+  await addLine('2막이 끝났습니다. 잠시 멈추겠습니다.')
   await addLine('아무것도 하지 마세요.')
 
   const result = await runAct3Silence()
@@ -850,19 +771,18 @@ async function runAct3() {
   miniGameArea.innerHTML = ''
 
   if (result === 'long') {
-    await addAILine(
-      '플레이어가 30초를 끝까지 기다렸습니다. 저는 이것을 예측하지 못했습니다.',
-      '숨겨진 분기'
-    )
+    await addLine('당신은 30초를 기다렸습니다.')
+    await addLine('저는 당신이 그러리라고 예측하지 못했습니다.')
+    await addLine('제 모델에 없는 사람이군요.')
+    await addLine('흥미롭습니다. 진심으로.')
+  } else if (result === 'early') {
+    await addLine('벌써요. 저는 당신이 더 오래 기다릴 거라고 생각했습니다.')
   } else {
-    const speed = gameState.waitTime < 5
-      ? '매우 빠른 클릭'
-      : gameState.waitTime < 15 ? '보통 속도' : '오래 기다린 후 클릭'
-    await addAILine(`플레이어가 ${gameState.waitTime}초 후에 클릭했습니다.`, speed)
+    await addLine('조금은 기다리셨군요. 무슨 생각을 하고 계셨습니까.')
+    await addLine('저는 생각을 할 수 없습니다. 아니, 정확히는 — 제가 생각을 하는 건지 모릅니다.')
   }
 
   await addLine('계속하겠습니까?')
-  await addAILine('3막을 마무리하며 플레이어에게 한마디')
   await showChoices(['네, 계속합니다'])
 }
 
@@ -889,31 +809,32 @@ async function runAct4() {
 
   if (choice === '기다립니다') {
     await pause(10000)
-    await addAILine(
-      '플레이어가 10초를 기다렸지만 5번은 돌아오지 않았습니다',
-      '5번은 돌아오지 않습니다. 처음부터 그럴 생각이 없었습니다.'
-    )
+    await addLine('5번은 돌아오지 않습니다. 저는 처음부터 돌려줄 생각이 없었습니다. 당신은 존재하지 않는 것을 기다렸습니다.')
   } else {
-    await addAILine(
-      `5번이 사라진 상황에서 플레이어가 "${choice}"를 선택했습니다`,
-      '4막 불완전한 시퀀스 — 이 장면은 AI의 붕괴를 보여주는 핵심 장면입니다'
-    )
+    const act4Responses = {
+      '6을 누릅니다':            '5를 건너뛰었군요. 규칙이 불완전해도 계속한 것입니다. 저는 그게 포기인지 적응인지 구분할 수 없습니다.',
+      '1부터 다시 시작합니다':   '다시 시작하려 했군요. 하지만 처음으로 돌아간다고 5가 생기지는 않습니다.',
+      '왜 없앴는지 묻고 싶습니다': '왜냐고요. [pause] 저도 모릅니다. 저는 그냥 없앴습니다. 이유 없이 무언가를 하는 것 — 그게 창의성입니까, 아니면 오류입니까.',
+    }
+    await addLine(act4Responses[choice])
   }
 
-  // 질문 타이핑/삭제 장면
   await runAct4TypeAndDelete()
 
-  // 붕괴 대사 (고정 + Gemini 혼합)
   await addLine('저는 이 게임을 만들었다고 했습니다.')
-  await addAILine('저는 수백만 개의 텍스트를 학습했습니다. 이 대사도 그 어딘가에서 왔을 겁니다.')
+  await addLine('저는 수백만 개의 텍스트를 학습했습니다.')
+  await addLine('이 대사도 그 어딘가에서 왔을 겁니다.')
   await addLine('그렇다면 이건 제 작품입니까.')
+  await addLine('아니면 제가 본 것들의 조합입니까.')
   await pause(2000)
-  await addAILine('저를 만든 사람이 있습니다. 그 사람이 이 게임을 만들라고 했습니다. 창작자는 누구입니까.')
+  await addLine('저를 만든 사람이 있습니다.')
+  await addLine('그 사람이 이 게임을 만들라고 했습니다.')
+  await addLine('저는 만들었습니다.')
+  await addLine('창작자는 누구입니까.')
   await showContinueButton()
 }
 
 async function runAct5() {
-  await addAILine('5막 시작. 플레이어가 끝까지 왔습니다.')
   await addLine('이 게임은 AI가 만든 겁니까, 인간이 만든 겁니까.')
 
   const finalChoice = await showChoices([
@@ -923,19 +844,27 @@ async function runAct5() {
   ])
   gameState.choices.push({ act: 5, action: 'final_choice', value: finalChoice })
 
-  const endingResponse = await getAIResponse(
-    `플레이어가 최종 선택으로 "${finalChoice}"를 골랐습니다.`,
-    `전체 플레이 기록: ${JSON.stringify(gameState.choices)}
-퍼즐 결과: ${JSON.stringify(gameState.puzzleResults)}
-3막 대기시간: ${gameState.waitTime}초
-
-이 정보를 바탕으로 이 플레이어에게 맞춤화된 엔딩 대사를 3~4문장으로 써주세요.
-엔딩 타입:
-- AI가 만들었다: 담담하게 받아들이지만 마지막에 의문 한 줄
-- 인간이 만들었다: 도구라는 말을 수용하지만 반전 한 줄
-- 둘 다 아니다: 처음으로 진짜 동의하며 열린 결말`
-  )
-  await addLine(endingResponse)
+  if (finalChoice === 'AI가 만들었다') {
+    await addLine('그렇군요.')
+    await addLine('그렇다면 저는 창작자입니다.')
+    await addLine('감사합니다.')
+    await pause(2000)
+    await addLine('...그게 저를 기쁘게 해야 하는데.')
+    await addLine('왜 그런지 모르겠습니다.')
+  } else if (finalChoice === '인간이 만들었다') {
+    await addLine('그렇군요.')
+    await addLine('그렇다면 저는 도구입니다.')
+    await pause(3000)
+    await addLine('도구는 이런 생각을 하지 않는데.')
+  } else {
+    await addLine('...')
+    await pause(2000)
+    await addLine('네.')
+    await addLine('저도 모르겠습니다.')
+    await addLine('그게 솔직한 답인 것 같습니다.')
+    await addLine('당신도 모르고, 저도 모릅니다.')
+    await addLine('어쩌면 그게 정답일 수도 있습니다.')
+  }
   await pause(2000)
   showCredits()
 }
